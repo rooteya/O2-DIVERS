@@ -26,7 +26,7 @@ alter table public.attempts enable row level security;
 
 -- ===== كلمة مرور المشرف (غيّرها) =====
 insert into public.app_settings (k, v)
-values ('admin_hash', extensions.crypt('CHANGE-ME', extensions.gen_salt('bf')))
+values ('admin_hash', extensions.crypt('admin123', extensions.gen_salt('bf')))
 on conflict (k) do update set v = excluded.v;
 
 -- ===== دوال مساعدة داخلية (غير متاحة من المتصفح) =====
