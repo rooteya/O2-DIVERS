@@ -76,9 +76,21 @@ button:disabled{opacity:.6;cursor:wait}
  </div>
  <div class="note" id="demoNote">وضع تجريبي (بدون ربط): عضو 0001 / 1234 — عضو 0002 / 5678 — المشرف: admin123</div>
 </section>
-<section id="member" class="hide"></section>
+<section id="member" class="hide">
+ <div id="mcard"></div>
+ <div class="card" id="pincard">
+  <div class="top" style="margin:0"><b>الأمان</b><button onclick="togglePin()">تغيير الرقم السري</button></div>
+  <div id="pinform" class="hide">
+   <label>الرقم السري الحالي</label><div class="pw"><input id="c_cur" type="password" inputmode="numeric" maxlength="4"><button type="button" class="eye" onclick="eye('c_cur',this)" aria-label="إظهار/إخفاء"></button></div>
+   <label>الرقم السري الجديد (4 أرقام)</label><div class="pw"><input id="c_new" type="password" inputmode="numeric" maxlength="4"><button type="button" class="eye" onclick="eye('c_new',this)" aria-label="إظهار/إخفاء"></button></div>
+   <label>تأكيد الرقم الجديد</label><div class="pw"><input id="c_new2" type="password" inputmode="numeric" maxlength="4"><button type="button" class="eye" onclick="eye('c_new2',this)" aria-label="إظهار/إخفاء"></button></div>
+   <div class="msg" id="perr"></div>
+   <button class="p" id="pbtn" onclick="changePin()">حفظ الرقم الجديد</button>
+  </div>
+ </div>
+</section>
 <section id="admin" class="hide">
- <div class="top"><h2 style="margin:0;font-size:18px">لوحة المشرف (<span id="cnt">0</span> عضو)</h2><div><button onclick="refresh()">تحديث</button> <button onclick="out()">خروج</button></div></div>
+ <div class="top"><h2 style="margin:0;font-size:18px">لوحة المشرف (<span id="cnt">0</span> عضو)</h2><div><button onclick="refresh()">تحديث</button> <button onclick="exportCsv()">نسخة احتياطية</button> <button onclick="out()">خروج</button></div></div>
  <div class="card"><div class="wrap"><table><thead><tr><th>الرقم</th><th>الاسم</th><th>النوع</th><th>الجوال</th><th>النقاط</th><th>الحالة</th><th></th></tr></thead><tbody id="tb"></tbody></table></div><div class="stamp" id="stamp"></div></div>
  <div class="card" id="formcard"><h3 id="ftitle" style="margin:0 0 4px;font-size:16px">إضافة عضو</h3>
   <div class="g2">
@@ -106,7 +118,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",
 const EYE='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const EYEOFF='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
 function eye(id,b){const i=$(id),s=i.type==="password";i.type=s?"text":"password";b.innerHTML=s?EYEOFF:EYE}
-function resetEyes(){document.querySelectorAll(".eye").forEach(b=>b.innerHTML=EYE);["mp","ap","f_pin"].forEach(i=>$(i).type="password")}
+function resetEyes(){document.querySelectorAll(".eye").forEach(b=>b.innerHTML=EYE);["mp","ap","f_pin","c_cur","c_new","c_new2"].forEach(i=>$(i).type="password")}
 resetEyes();$("demoNote").classList.toggle("hide",!!CONFIG.SUPABASE_URL);
 
 // ---- الاتصال: يعمل مع Apps Script، أو بيانات تجريبية إذا لم يُضبط الرابط ----
@@ -116,13 +128,14 @@ const demo=[
  {n:"0003",name:"خالد الشمري",pin:"4321",plan:"عادية",phone:"0539876543",joined:"2024-06-21",points:300,active:false}];
 async function api(b){
   if(CONFIG.SUPABASE_URL){
-    const map={login:["member_login",{p_n:b.n,p_pin:b.pin}],list:["admin_list",{p_pw:b.pw}],save:["admin_save",{p_pw:b.pw,p_member:b.member,p_orig:b.orig||null}],delete:["admin_delete",{p_pw:b.pw,p_n:b.n}]};
+    const map={login:["member_login",{p_n:b.n,p_pin:b.pin}],changepin:["member_change_pin",{p_n:b.n,p_pin:b.pin,p_new:b.newpin}],list:["admin_list",{p_pw:b.pw}],save:["admin_save",{p_pw:b.pw,p_member:b.member,p_orig:b.orig||null}],delete:["admin_delete",{p_pw:b.pw,p_n:b.n}]};
     const [fn,args]=map[b.action];
     const r=await fetch(CONFIG.SUPABASE_URL+"/rest/v1/rpc/"+fn,{method:"POST",headers:{"Content-Type":"application/json",apikey:CONFIG.SUPABASE_KEY,...(CONFIG.SUPABASE_KEY.startsWith("eyJ")?{Authorization:"Bearer "+CONFIG.SUPABASE_KEY}:{})},body:JSON.stringify(args)});
     return r.json();
   }
   const strip=({pin,...r})=>r;
   if(b.action==="login"){const m=demo.find(x=>x.n===b.n&&x.pin===b.pin);return m?{ok:true,member:strip(m)}:{ok:false,error:"رقم العضوية أو الرقم السري غير صحيح"}}
+  if(b.action==="changepin"){const m=demo.find(x=>x.n===b.n&&x.pin===b.pin);if(!m)return{ok:false,error:"الرقم السري الحالي غير صحيح"};m.pin=b.newpin;return{ok:true}}
   if(b.pw!=="admin123")return{ok:false,error:"كلمة المرور غير صحيحة"};
   if(b.action==="list")return{ok:true,members:demo.map(strip)};
   if(b.action==="save"){const i=demo.findIndex(x=>x.n===(b.orig||b.member.n)),d=demo.findIndex(x=>x.n===b.member.n);
@@ -152,14 +165,26 @@ async function go(){
   }catch(e){$("err").textContent=typeof e==="string"?e:"تعذر الاتصال، حاول مرة أخرى"}
   btn.disabled=false;
 }
-function out(){clearInterval(timer);cred=adminPw=null;orig=null;["mp","ap","mn"].forEach(i=>$(i).value="");resetEyes();$("err").textContent="";show("login")}
+function out(){clearInterval(timer);cred=adminPw=null;orig=null;["mp","ap","mn","c_cur","c_new","c_new2"].forEach(i=>$(i).value="");$("pinform").classList.add("hide");$("perr").textContent="";resetEyes();$("err").textContent="";show("login")}
 function startPoll(){clearInterval(timer);timer=setInterval(async()=>{
   if(document.hidden)return;
   try{if(adminPw)await refresh(true);else if(cred){const r=await api({action:"login",...cred});if(r.ok)showMember(r.member)}}catch(e){}
 },30000)}
 
+function togglePin(){$("pinform").classList.toggle("hide");$("perr").textContent=""}
+async function changePin(){
+  const cur=$("c_cur").value.trim(),n1=$("c_new").value.trim(),n2=$("c_new2").value.trim();
+  const bad=!/^\d{4}$/.test(cur)?"أدخل الرقم السري الحالي (4 أرقام)":!/^\d{4}$/.test(n1)?"الرقم الجديد يجب أن يكون 4 أرقام":n1!==n2?"الرقمان غير متطابقين":n1===cur?"الرقم الجديد مطابق للحالي":"";
+  if(bad){$("perr").textContent=bad;return}
+  $("pbtn").disabled=true;$("perr").textContent="";
+  try{
+    const r=await api({action:"changepin",n:cred.n,pin:cur,newpin:n1});if(!r.ok)throw r.error;
+    cred.pin=n1;["c_cur","c_new","c_new2"].forEach(i=>$(i).value="");resetEyes();$("pinform").classList.add("hide");toast("تم تغيير الرقم السري");
+  }catch(e){$("perr").textContent=typeof e==="string"?e:"تعذر الاتصال، حاول مرة أخرى"}
+  $("pbtn").disabled=false;
+}
 function showMember(m){
-  $("member").innerHTML=`<div class="top"><h2 style="margin:0;font-size:18px">أهلاً ${esc(m.name)}</h2><button onclick="out()">خروج</button></div>
+  $("mcard").innerHTML=`<div class="top"><h2 style="margin:0;font-size:18px">أهلاً ${esc(m.name)}</h2><button onclick="out()">خروج</button></div>
   <div class="card">
    <div class="row"><span>رقم العضوية</span><b>${esc(m.n)}</b></div>
    <div class="row"><span>نوع العضوية</span><b>${esc(m.plan)}</b></div>
@@ -181,6 +206,13 @@ async function refresh(quiet){
   if(!adminPw)return;
   const r=await api({action:"list",pw:adminPw});
   if(r.ok){members=r.members;renderTable();if(!quiet)toast("تم التحديث")}else if(!quiet)toast(r.error);
+}
+function exportCsv(){
+  const q=v=>'"'+String(v).replace(/"/g,'""')+'"',t=v=>'="'+v+'"';
+  const rows=[["رقم العضوية","الاسم","نوع العضوية","الجوال","تاريخ الانضمام","النقاط","الحالة"].map(q),...members.map(m=>[t(m.n),q(m.name),q(m.plan),t(m.phone),q(m.joined),m.points,q(m.active?"فعّالة":"منتهية")])];
+  const csv="\ufeff"+rows.map(r=>r.join(",")).join("\r\n");
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+  a.download="members-"+new Date().toISOString().slice(0,10)+".csv";document.body.appendChild(a);a.click();a.remove();toast("تم تنزيل النسخة");
 }
 function fill(m){["n","name","pin","plan","phone","joined","points"].forEach(k=>$("f_"+k).value=m[k]??"");$("f_active").value=m.active?"1":"0"}
 function clearForm(){orig=null;fill({n:"",name:"",pin:"",plan:"عادية",phone:"",joined:new Date().toISOString().slice(0,10),points:0,active:true});
